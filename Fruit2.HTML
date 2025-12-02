@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Falling Fruits Grammar Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Comic Sans MS', 'Marker Felt', 'Arial Rounded MT Bold', sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #6ecbf5, #94f7a1);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            padding: 20px;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+        
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, #a8e6cf, #ffd3b6);
+        }
+        
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        #score-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.85);
+            padding: 10px 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        #score, #lives {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ff6b6b;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+        
+        #lives-container {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .life {
+            width: 25px;
+            height: 25px;
+            background: #ff6b6b;
+            border-radius: 50%;
+        }
+        
+        #basket {
+            position: absolute;
+            bottom: 20px;
+            width: 100px;
+            height: 60px;
+            background: #ffcc5c;
+            border-radius: 0 0 40px 40px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            z-index: 10;
+        }
+        
+        #basket::before {
+            content: "";
+            width: 80px;
+            height: 15px;
+            background: #d4a574;
+            border-radius: 10px;
+        }
+        
+        .fruit {
+            position: absolute;
+            font-size: 40px;
+            text-align: center;
+            user-select: none;
+            z-index: 5;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+        }
+        
+        #start-screen, #game-over-screen, #victory-screen, #quiz-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 30px;
+            text-align: center;
+            z-index: 20;
+        }
+        
+        #quiz-screen {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 70%;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        h1 {
+            font-size: 48px;
+            color: #ff6b6b;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        h2 {
+            font-size: 36px;
+            color: #4a90e2;
+            margin-bottom: 30px;
+        }
+        
+        p {
+            font-size: 24px;
+            margin-bottom: 30px;
+            color: #333;
+            line-height: 1.4;
+        }
+        
+        .btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 22px;
+            border-radius: 50px;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            pointer-events: auto;
+        }
+        
+        .btn:hover {
+            background: #ff5252;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+        }
+        
+        .btn:active {
+            transform: translateY(1px);
+        }
+        
+        .btn.correct {
+            background: #77dd77;
+        }
+        
+        .btn.correct:hover {
+            background: #66cc66;
+        }
+        
+        .btn.incorrect {
+            background: #ff6b6b;
+        }
+        
+        #quiz-question {
+            font-size: 28px;
+            margin: 20px 0;
+            color: #4a90e2;
+        }
+        
+        #quiz-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            width: 100%;
+            margin-top: 20px;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            border-radius: 50%;
+            animation: confetti-fall 5s linear forwards;
+            z-index: 100;
+        }
+        
+        @keyframes confetti-fall {
+            0% {
+                transform: translateY(0) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+        
+        .instructions {
+            background: rgba(255, 255, 255, 0.7);
+            padding: 15px;
+            border-radius: 15px;
+            margin: 15px 0;
+            max-width: 80%;
+        }
+        
+        .fruit-emoji {
+            font-size: 32px;
+            margin: 0 5px;
+        }
+        
+        @media (max-width: 850px) {
+            #game-container {
+                width: 95vw;
+                height: 70vh;
+            }
+            
+            h1 {
+                font-size: 36px;
+            }
+            
+            #score, #lives {
+                font-size: 20px;
+            }
+            
+            .fruit {
+                font-size: 32px;
+            }
+            
+            #basket {
+                width: 80px;
+                height: 50px;
+            }
+            
+            #basket::before {
+                width: 65px;
+                height: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        <div id="ui-overlay">
+            <div id="score-container">
+                <div id="score">Score: 0</div>
+                <div id="lives-container">
+                    <div class="life"></div>
+                    <div class="life"></div>
+                    <div class="life"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="start-screen">
+            <h1>Falling Fruits Grammar Game</h1>
+            <div class="instructions">
+                <p>Catch the falling fruits with your basket! 🍎🍌🍇</p>
+                <p>When you reach 5 points, answer a grammar question!</p>
+                <p>Get 50 points to win! 🎉</p>
+            </div>
+            <div>
+                <span class="fruit-emoji">🍎</span>
+                <span class="fruit-emoji">🍌</span>
+                <span class="fruit-emoji">🍇</span>
+                <span class="fruit-emoji">🍊</span>
+                <span class="fruit-emoji">🍓</span>
+            </div>
+            <button id="start-btn" class="btn">Start Game</button>
+        </div>
+        
+        <div id="game-over-screen" class="hidden">
+            <h1>Game Over!</h1>
+            <p>You missed too many fruits!</p>
+            <p>Final Score: <span id="final-score">0</span></p>
+            <button id="restart-btn" class="btn">Play Again</button>
+        </div>
+        
+        <div id="victory-screen" class="hidden">
+            <h1>Congratulations!</h1>
+            <p>You reached 50 points! 🎉</p>
+            <p>You're a grammar master! 🌟</p>
+            <button id="play-again-btn" class="btn">Play Again</button>
+        </div>
+        
+        <div id="quiz-screen" class="hidden">
+            <h2>Grammar Quiz!</h2>
+            <p>Choose the correct verb form:</p>
+            <div id="quiz-question">Present Simple or Present Continuous?</div>
+            <div id="quiz-options">
+                <!-- Options will be added by JavaScript -->
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Game elements
+        const gameContainer = document.getElementById('game-container');
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const basket = document.createElement('div');
+        basket.id = 'basket';
+        gameContainer.appendChild(basket);
+        
+        const scoreDisplay = document.getElementById('score');
+        const livesContainer = document.getElementById('lives-container');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const victoryScreen = document.getElementById('victory-screen');
+        const quizScreen = document.getElementById('quiz-screen');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const startBtn = document.getElementById('start-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const playAgainBtn = document.getElementById('play-again-btn');
+        const quizQuestion = document.getElementById('quiz-question');
+        const quizOptions = document.getElementById('quiz-options');
+        
+        // Game state
+        let gameActive = false;
+        let score = 0;
+        let lives = 3;
+        let basketX = 0;
+        let fruits = [];
+        let gameSpeed = 2;
+        let nextQuizScore = 5;
+        let currentQuiz = null;
+        let confetti = [];
+        
+        // Fruit types - using emojis as fallback
+        const fruitEmojis = ['🍎', '🍌', '🍇', '🍊', '🍓', '🍑', '🍍', '🥝', '🍉', '🍒'];
+        
+        // Quiz questions - Present Simple vs Present Continuous
+        const quizQuestions = [
+            {
+                question: "She _____ to school every day.",
+                options: ["goes", "is going"],
+                correct: 0
+            },
+            {
+                question: "Look! The dog _____ in the garden.",
+                options: ["plays", "is playing"],
+                correct: 1
+            },
+            {
+                question: "They _____ English on Mondays.",
+                options: ["study", "are studying"],
+                correct: 0
+            },
+            {
+                question: "I _____ my homework now.",
+                options: ["do", "am doing"],
+                correct: 1
+            },
+            {
+                question: "He _____ TV in the evening.",
+                options: ["watches", "is watching"],
+                correct: 0
+            },
+            {
+                question: "We _____ dinner at the moment.",
+                options: ["have", "are having"],
+                correct: 1
+            },
+            {
+                question: "Sarah _____ to music every night.",
+                options: ["listens", "is listening"],
+                correct: 0
+            },
+            {
+                question: "Tom _____ his car right now.",
+                options: ["washes", "is washing"],
+                correct: 1
+            },
+            {
+                question: "Birds _____ south in winter.",
+                options: ["fly", "are flying"],
+                correct: 0
+            },
+            {
+                question: "I _____ a great book this week.",
+                options: ["read", "am reading"],
+                correct: 1
+            },
+            {
+                question: "The sun _____ in the east.",
+                options: ["rises", "is rising"],
+                correct: 0
+            },
+            {
+                question: "She _____ a letter now.",
+                options: ["writes", "is writing"],
+                correct: 1
+            },
+            {
+                question: "Water _____ at 100°C.",
+                options: ["boils", "is boiling"],
+                correct: 0
+            },
+            {
+                question: "They _____ football at the moment.",
+                options: ["play", "are playing"],
+                correct: 1
+            },
+            {
+                question: "Cats _____ milk.",
+                options: ["like", "are liking"],
+                correct: 0
+            },
+            {
+                question: "I _____ for the bus right now.",
+                options: ["wait", "am waiting"],
+                correct: 1
+            },
+            {
+                question: "He _____ coffee in the morning.",
+                options: ["drinks", "is drinking"],
+                correct: 0
+            },
+            {
+                question: "We _____ a movie tonight.",
+                options: ["watch", "are watching"],
+                correct: 1
+            },
+            {
+                question: "The Earth _____ around the sun.",
+                options: ["rotates", "is rotating"],
+                correct: 0
+            },
+            {
+                question: "She _____ her baby to sleep now.",
+                options: ["sings", "is singing"],
+                correct: 1
+            }
+        ];
+        
+        // Initialize canvas size
+        function resizeCanvas() {
+            canvas.width = gameContainer.offsetWidth;
+            canvas.height = gameContainer.offsetHeight;
+            basketX = canvas.width / 2 - basket.offsetWidth / 2;
+            basket.style.left = basketX + 'px';
+            basket.style.bottom = '20px';
+        }
+        
+        // Initialize game
+        function initGame() {
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // Basket controls
+            canvas.addEventListener('mousemove', (e) => {
+                if (gameActive && !quizScreen.classList.contains('hidden')) return;
+                const rect = canvas.getBoundingClientRect();
+                basketX = e.clientX - rect.left - basket.offsetWidth / 2;
+                basketX = Math.max(0, Math.min(basketX, canvas.width - basket.offsetWidth));
+                basket.style.left = basketX + 'px';
+            });
+            
+            // Keyboard controls
+            document.addEventListener('keydown', (e) => {
+                if (!gameActive || !quizScreen.classList.contains('hidden')) return;
+                
+                if (e.key === 'ArrowLeft') {
+                    basketX = Math.max(0, basketX - 20);
+                    basket.style.left = basketX + 'px';
+                } else if (e.key === 'ArrowRight') {
+                    basketX = Math.min(canvas.width - basket.offsetWidth, basketX + 20);
+                    basket.style.left = basketX + 'px';
+                }
+            });
+            
+            // Button event listeners
+            startBtn.addEventListener('click', startGame);
+            restartBtn.addEventListener('click', startGame);
+            playAgainBtn.addEventListener('click', startGame);
+            
+            // Draw initial background
+            drawBackground();
+        }
+        
+        // Start the game
+        function startGame() {
+            gameActive = true;
+            score = 0;
+            lives = 3;
+            fruits = [];
+            gameSpeed = 2;
+            nextQuizScore = 5;
+            currentQuiz = null;
+            confetti = [];
+            
+            updateScore();
+            updateLives();
+            
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            victoryScreen.classList.add('hidden');
+            quizScreen.classList.add('hidden');
+            
+            gameLoop();
+        }
+        
+        // Main game loop
+        function gameLoop() {
+            if (!gameActive) return;
+            
+            // Clear canvas
+            drawBackground();
+            
+            // Move and draw fruits
+            moveFruits();
+            drawFruits();
+            
+            // Check for collisions
+            checkCollisions();
+            
+            // Spawn new fruits
+            if (Math.random() < 0.03) {
+                spawnFruit();
+            }
+            
+            // Increase difficulty with score
+            gameSpeed = 2 + Math.floor(score / 10);
+            
+            // Request next frame
+            if (gameActive) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+        
+        // Draw background
+        function drawBackground() {
+            // Sky gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#a8e6cf');
+            gradient.addColorStop(1, '#ffd3b6');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Clouds
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            drawCloud(100, 80, 30);
+            drawCloud(300, 60, 40);
+            drawCloud(500, 100, 25);
+            drawCloud(700, 70, 35);
+            
+            // Ground
+            ctx.fillStyle = '#d4a574';
+            ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+            
+            // Grass
+            ctx.fillStyle = '#88d498';
+            ctx.fillRect(0, canvas.height - 25, canvas.width, 5);
+        }
+        
+        // Draw cloud
+        function drawCloud(x, y, size) {
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.arc(x + size * 0.8, y - size * 0.2, size * 0.8, 0, Math.PI * 2);
+            ctx.arc(x + size * 1.5, y, size * 0.9, 0, Math.PI * 2);
+            ctx.arc(x + size * 1.2, y + size * 0.3, size * 0.7, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Spawn a new fruit
+        function spawnFruit() {
+            const fruitType = Math.floor(Math.random() * fruitEmojis.length);
+            const x = Math.random() * (canvas.width - 50);
+            const y = -50;
+            const speed = gameSpeed + Math.random() * 2;
+            const rotation = Math.random() * 360;
+            const rotationSpeed = (Math.random() - 0.5) * 5;
+            
+            fruits.push({
+                x,
+                y,
+                speed,
+                rotation,
+                rotationSpeed,
+                type: fruitType,
+                size: 40 + Math.random() * 20
+            });
+        }
+        
+        // Move fruits
+        function moveFruits() {
+            for (let i = fruits.length - 1; i >= 0; i--) {
+                const fruit = fruits[i];
+                fruit.y += fruit.speed;
+                fruit.rotation += fruit.rotationSpeed;
+                
+                // Remove fruits that fall off screen
+                if (fruit.y > canvas.height + 50) {
+                    fruits.splice(i, 1);
+                    loseLife();
+                }
+            }
+        }
+        
+        // Draw fruits
+        function drawFruits() {
+            fruits.forEach(fruit => {
+                ctx.save();
+                ctx.translate(fruit.x + fruit.size/2, fruit.y + fruit.size/2);
+                ctx.rotate(fruit.rotation * Math.PI / 180);
+                
+                // Draw fruit
+                ctx.font = `${fruit.size}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(fruitEmojis[fruit.type], 0, 0);
+                
+                ctx.restore();
+            });
+        }
+        
+        // Check collisions with basket
+        function checkCollisions() {
+            const basketRect = {
+                x: basketX,
+                y: canvas.height - 80,
+                width: basket.offsetWidth,
+                height: basket.offsetHeight
+            };
+            
+            for (let i = fruits.length - 1; i >= 0; i--) {
+                const fruit = fruits[i];
+                const fruitRect = {
+                    x: fruit.x,
+                    y: fruit.y,
+                    width: fruit.size,
+                    height: fruit.size
+                };
+                
+                if (isColliding(basketRect, fruitRect)) {
+                    fruits.splice(i, 1);
+                    score += 1;
+                    updateScore();
+                    
+                    // Check if quiz should appear
+                    if (score >= nextQuizScore) {
+                        nextQuizScore += 5;
+                        showQuiz();
+                    }
+                    
+                    // Check for victory
+                    if (score >= 50) {
+                        showVictory();
+                    }
+                }
+            }
+        }
+        
+        // Check collision between two rectangles
+        function isColliding(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+        
+        // Update score display
+        function updateScore() {
+            scoreDisplay.textContent = `Score: ${score}`;
+        }
+        
+        // Update lives display
+        function updateLives() {
+            livesContainer.innerHTML = '';
+            for (let i = 0; i < lives; i++) {
+                const life = document.createElement('div');
+                life.className = 'life';
+                livesContainer.appendChild(life);
+            }
+        }
+        
+        // Lose a life
+        function loseLife() {
+            lives--;
+            updateLives();
+            
+            if (lives <= 0) {
+                gameOver();
+            }
+        }
+        
+        // Show quiz screen
+        function showQuiz() {
+            gameActive = false;
+            quizScreen.classList.remove('hidden');
+            
+            // Select a random quiz question
+            const quizIndex = Math.floor(Math.random() * quizQuestions.length);
+            currentQuiz = quizQuestions[quizIndex];
+            
+            quizQuestion.textContent = currentQuiz.question;
+            
+            // Clear previous options
+            quizOptions.innerHTML = '';
+            
+            // Add new options
+            currentQuiz.options.forEach((option, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'btn';
+                btn.textContent = option;
+                btn.addEventListener('click', () => answerQuiz(index === currentQuiz.correct));
+                quizOptions.appendChild(btn);
+            });
+        }
+        
+        // Handle quiz answer
+        function answerQuiz(isCorrect) {
+            // Add feedback to buttons
+            const buttons = quizOptions.querySelectorAll('.btn');
+            buttons.forEach((btn, index) => {
+                if (index === currentQuiz.correct) {
+                    btn.classList.add('correct');
+                } else if (!isCorrect && index === (currentQuiz.correct ? 1 : 0)) {
+                    btn.classList.add('incorrect');
+                }
+            });
+            
+            // Update score based on answer
+            if (isCorrect) {
+                // Correct answer - continue game
+                setTimeout(() => {
+                    quizScreen.classList.add('hidden');
+                    gameActive = true;
+                    gameLoop();
+                }, 1500);
+            } else {
+                // Incorrect answer - lose points
+                score = Math.max(0, score - 5);
+                updateScore();
+                
+                setTimeout(() => {
+                    quizScreen.classList.add('hidden');
+                    gameActive = true;
+                    gameLoop();
+                }, 1500);
+            }
+        }
+        
+        // Game over
+        function gameOver() {
+            gameActive = false;
+            finalScoreDisplay.textContent = score;
+            gameOverScreen.classList.remove('hidden');
+        }
+        
+        // Show victory screen
+        function showVictory() {
+            gameActive = false;
+            victoryScreen.classList.remove('hidden');
+            createConfetti();
+        }
+        
+        // Create confetti for victory
+        function createConfetti() {
+            const colors = ['#ff6b6b', '#4ecdc4', '#ffd166', '#06d6a0', '#118ab2'];
+            const container = document.getElementById('game-container');
+            
+            for (let i = 0; i < 150; i++) {
+                const confettiPiece = document.createElement('div');
+                confettiPiece.className = 'confetti';
+                confettiPiece.style.left = Math.random() * 100 + '%';
+                confettiPiece.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                confettiPiece.style.animationDuration = (Math.random() * 3 + 2) + 's';
+                confettiPiece.style.width = (Math.random() * 10 + 5) + 'px';
+                confettiPiece.style.height = confettiPiece.style.width;
+                container.appendChild(confettiPiece);
+                
+                // Remove confetti after animation
+                setTimeout(() => {
+                    confettiPiece.remove();
+                }, 5000);
+            }
+        }
+        
+        // Initialize the game when loaded
+        window.addEventListener('load', initGame);
+    </script>
+</body>
+</html>
+
