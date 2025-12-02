@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Christmas maze</title>
+<style>
+  :root{
+    --bg: #91CCF1; /* holiday background */
+    --player: #91CCF1; /* cyan */
+    --goal: #10b981; /* emerald */
+    --gift: #fbbf24; /* gift */
+    --enemy: #ef4444; /* red */
+    --wall: #91ccf1;
+  }
+  html,body{height:100%;margin:0;font-family:Inter, system-ui, Arial, sans-serif;background:var(--bg);color:#fff}
+  .app{min-height:100%;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box}
+  .frame{width:100%;max-width:1100px;background:linear-gradient(180deg,var(--panel),#a82222);padding:14px;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,0.4)}
+  .header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  h1{margin:0;font-size:20px}
+  .controls{display:flex;gap:8px;align-items:center}
+  button{background:##A60000;border:2px solid rgba(255,255,255,0.15);color:##A60000;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600}
+  button:hover{filter:brightness(1.08)}
+  .status{display:flex;gap:12px;align-items:center}
+  .stat{background:rgba(0,0,0,0.15);padding:8px 10px;border-radius:8px;font-weight:700}
+  main{display:flex;gap:16px;margin-top:12px;align-items:flex-start}
+  .board-wrap{flex:1;display:flex;align-items:center;justify-content:center}
+  canvas{background:transparent;display:block;border-radius:8px}
+  .side{width:260px;min-width:200px}
+  .panel{background:rgba(0,0,0,0.12);padding:12px;border-radius:10px}
+  .keys-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .key-icon{width:28px;height:28px;border-radius:6px;background:var(--gift);display:flex;align-items:center;justify-content:center;color:#7a3e00;font-weight:800;box-shadow:0 3px 0 rgba(0,0,0,0.2)}
+  .key-icon.dim{opacity:0.35}
+  .legend{margin-top:10px;font-size:13px}
+
+  /* modal */
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:60}
+  .modal{background:linear-gradient(180deg,#91ccf1,#91ccf1);color:#222;padding:18px;border-radius:12px;min-width:320px;max-width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.6);border:6px solid var(--panel)}
+  .q-title{font-weight:800;margin-bottom:8px}
+  .opts{display:flex;flex-direction:column;gap:8px}
+  .opt-btn{background:var(--panel);color:#fff;padding:10px;border-radius:8px;border:0;font-weight:700;cursor:pointer}
+  .opt-btn:hover{filter:brightness(1.05)}
+  .win-star{font-size:22px;margin-right:8px}
+
+  @media(max-width:860px){
+    .side{display:none}
+    .frame{padding:10px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="frame">
+    <div class="header">
+                   <h1>Christmas MAZE</h1>
+      <div class="controls">
+        <div class="status">
+          <div class="stat" id="timer">00:00.0</div>
+          <div class="stat" id="steps">Steps: 0</div>
+        </div>
+        <button id="newMazeBtn">New Maze</button>
+        <button id="replayBtn">Replay</button>
+      </div>
+    </div>
+    <main>
+      <div class="board-wrap">
+        <canvas id="mazeCanvas"></canvas>
+      </div>
+      <aside class="side">
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>Keys</strong>
+            <span id="collectedCount">0 / 10</span>
+          </div>
+          <div class="keys-row" id="keysRow"></div>
+          <div class="legend">
+            <div>Player: <span style="color:var(--player)">●</span> Santa</div>
+            <div>Goal: <span style="color:var(--goal)">●</span> Exit</div>
+            <div>Enemy: <span style="color:var(--enemy)">●</span></div>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+</div>
+
+<!-- Modal for quiz -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal" id="quizModal">
+    <div class="q-title" id="qText">Question...</div>
+    <div class="opts" id="qOpts"></div>
+  </div>
+</div>
+
+<!-- Win modal -->
+<div class="modal-backdrop" id="winBackdrop">
+  <div class="modal" id="winModal" style="text-align:center">
+    <div style="font-size:20px;font-weight:900">🎉 You are a winner!</div>
+    <div id="winStats" style="margin-top:10px"></div>
+    <div style="margin-top:14px;font-weight:800">⭐ Perfect route!</div>
+    <div style="margin-top:12px"><button id="closeWin">Close</button></div>
+  </div>
+</div>
+
+<script>
+/* Single-file Escape the Maze
+   - 35x35 grid
+   - DFS backtracker maze
+   - 10 keys with quiz
+   - enemies and exit after collecting all keys
+*/
+
+const COLS = 15, ROWS = 15;
+const CELL_COUNT = COLS*ROWS;
+const KEY_COUNT = 10;
+const ENEMY_COUNT = 5;
+
+// parse questions from provided CSV block
+const rawQuestions = `Go,Goed,Go,Went,3
+Eat,Eated,Eat,Ate,3
+See,Seed,See,Saw,3
+Take,Took,Taked,Take,1
+Come,Comed,Come,Came,3
+Give,Gived,Give,Gave,3
+Find,Finded,Find,Found,3
+Make,Maked,Make,Made,3
+Get,Getted,Get,Got,3
+Know,Knowed,Know,Knew,3
+Think,Thought,Think,Thinking,1
+Say,Sayed,Say,Said,3
+Run,Ranned,Run,Ran,3
+Put,Putted,Put,Puted,2
+Read,Readed,Red,Read,3
+Write,Writed,Write,Wrote,3
+Speak,Speaked,Speak,Spoke,3
+Break,Breaked,Broke,Break,2
+Meet,Meet,Meeted,Met,3
+Pay,Payed,Pay,Paid,3
+Sit,Sitted,Sit,Sat,3
+Stand,Stand,Stood,Standed,2
+Begin,Begun,Began,Begin,2
+Drink,Drank,Drink,Dringed,1
+Sing,Sang,Sing,Singed,1
+Swim,Swimmed,Swam,Swim,2
+Fly,Flied,Flew,Fly,2
+Ride,Rided,Rode,Ride,2
+Drive,Drived,Drove,Drive,2
+Choose,Choosed,Chose,Choose,2
+Forget,Forgetted,Forgot,Forget,2
+Wear,Wore,Wear,Wearned,1
+Tear,Tore,Tear,Teared,1
+Feel,Felt,Feel,Feeld,1
+Keep,Keeped,Kept,Keep,2
+Leave,Leaved,Left,Leave,2
+Lose,Lost,Lose,Loosed,1
+Send,Sended,Send,Sent,3
+Build,Builded,Built,Build,2
+Catch,Catched,Caught,Catch,2
+Teach,Teached,Teach,Taught,3
+Buy,Buyed,Bought,Buy,2
+Bring,Bringed,Brought,Bring,2
+Fight,Fight,Fought,Fighted,2
+Sleep,Sleeped,Slept,Sleep,2
+Sweep,Sweeped,Swept,Sweep,2
+Tell,Telled,Told,Tell,2
+Sell,Selled,Sold,Sell,2
+Hear,Heard,Hear,Heared,1
+Understand,Understood,Understand,Understanded,1`;
+
+const QUESTIONS = rawQuestions.split('\n').map(line=>{
+  const parts=line.split(',');
+  return {q:parts[0],opts:[parts[1],parts[2],parts[3]],ans:parseInt(parts[4],10)}
+});
+
+// canvas and rendering
+const canvas = document.getElementById('mazeCanvas');
+const ctx = canvas.getContext('2d');
+let size = 700; // will adapt
+
+function resizeCanvas(){
+  const wrap = document.querySelector('.board-wrap');
+  const rect = wrap.getBoundingClientRect();
+  const side = Math.min(rect.width, window.innerHeight - 180, 820);
+  size = Math.max(360, side);
+  canvas.width = size; canvas.height = size;
+  cellSize = size / COLS;
+  draw();
+}
+window.addEventListener('resize', resizeCanvas);
+
+// maze data: cells with walls N,E,S,W
+let grid = [];
+function initGrid(){
+  grid=[];
+  for(let r=0;r<ROWS;r++){
+    const row=[];
+    for(let c=0;c<COLS;c++){
+      row.push({r,c,walls:[1,1,1,1],visited:false});
+    }
+    grid.push(row);
+  }
+}
+
+function indexOK(r,c){return r>=0&&c>=0&&r<ROWS&&c<COLS}
+
+function carveMazeDFS(){
+  initGrid();
+  const stack=[];
+  const start = grid[0][0];
+  start.visited=true; stack.push(start);
+  while(stack.length){
+    const current = stack[stack.length-1];
+    const {r,c}=current;
+    const neighbors=[];
+    const dirs = [[-1,0,0,2],[0,1,1,3],[1,0,2,0],[0,-1,3,1]]; // dr,dc,wallIndexForNeighbor,opposite
+    for(let i=0;i<4;i++){
+      const [dr,dc,wi,odi]=dirs[i];
+      const nr=r+dr, nc=c+dc;
+      if(indexOK(nr,nc) && !grid[nr][nc].visited){
+        neighbors.push({cell:grid[nr][nc],dirIndex:i});
+      }
+    }
+    if(neighbors.length){
+      const pick = neighbors[Math.floor(Math.random()*neighbors.length)];
+      const ncell = pick.cell;
+      // remove walls between current and ncell
+      const dir = pick.dirIndex;
+      const opposites=[2,3,0,1];
+      current.walls[dir]=0;
+      ncell.walls[opposites[dir]]=0;
+      ncell.visited=true;
+      stack.push(ncell);
+    } else {
+      stack.pop();
+    }
+  }
+}
+
+// find random passable cell (i.e., has at least one open wall or neighbor)
+function randomPassableCell(excludeSet=new Set()){
+  let tries=0;
+  while(tries<10000){
+    const r=Math.floor(Math.random()*ROWS);
+    const c=Math.floor(Math.random()*COLS);
+    const key = r+','+c;
+    if(excludeSet.has(key)){tries++; continue}
+    const cell=grid[r][c];
+    // ensure cell is not a wall island; check at least one wall open
+    if(cell.walls.some(w=>w===0)) return {r,c};
+    tries++;
+  }
+  return {r:0,c:0};
+}
+
+// game state
+let player = {r:0,c:0};
+let steps = 0;
+let timerStart = null; let timerId = null;
+let collected = Array(KEY_COUNT).fill(false);
+let keyPositions = [];
+let exitPos = null;
+let enemies = [];
+let enemyInterval = null;
+let keysIcons = document.getElementById('keysRow');
+
+// UI elements
+const timerEl = document.getElementById('timer');
+const stepsEl = document.getElementById('steps');
+const collectedCountEl = document.getElementById('collectedCount');
+const newMazeBtn = document.getElementById('newMazeBtn');
+const replayBtn = document.getElementById('replayBtn');
+
+newMazeBtn.addEventListener('click', ()=>initGame(true));
+replayBtn.addEventListener('click', ()=>replay());
+
+// modal handling
+const modalBackdrop = document.getElementById('modalBackdrop');
+const qText = document.getElementById('qText');
+const qOpts = document.getElementById('qOpts');
+let currentKeyIndex = null; // index of key being picked
+
+function showQuestionForKey(keyIdx){
+  currentKeyIndex = keyIdx;
+  const q = QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)];
+  qText.textContent = `Choose the correct past form of "${q.q}"`;
+  qOpts.innerHTML='';
+  q.opts.forEach((opt,i)=>{
+    const btn = document.createElement('button');
+    btn.className='opt-btn';
+    btn.textContent = opt;
+    btn.addEventListener('click', ()=>{
+      closeQuiz();
+      if(i+1===q.ans){
+        // correct
+        collected[keyIdx]=true;
+        updateKeyIcons();
+        // remove key from map
+        keyPositions[keyIdx]=null;
+        checkAllCollected();
+      } else {
+        // wrong: move the key to a new random passable cell
+        keyPositions[keyIdx] = randomPassableCell(new Set([player.r+','+player.c]));
+      }
+    });
+    qOpts.appendChild(btn);
+  });
+  modalBackdrop.style.display='flex';
+}
+function closeQuiz(){ modalBackdrop.style.display='none'; }
+
+// win modal
+const winBackdrop = document.getElementById('winBackdrop');
+const winStats = document.getElementById('winStats');
+const closeWin = document.getElementById('closeWin');
+closeWin.addEventListener('click', ()=>winBackdrop.style.display='none');
+
+function showWin(){
+  winStats.innerHTML = `<div>Time: ${timerEl.textContent}</div><div>Steps: ${steps}</div><div>Keys: ${KEY_COUNT}/${KEY_COUNT}</div>`;
+  winBackdrop.style.display='flex';
+  stopTimer();
+}
+
+function updateKeyIcons(){
+  keysIcons.innerHTML='';
+  let count=0;
+  for(let i=0;i<KEY_COUNT;i++){
+    const el = document.createElement('div');
+    el.className='key-icon';
+    if(!collected[i]) el.classList.add('dim'); else {el.classList.remove('dim'); count++;}
+    el.textContent='🎁';
+    keysIcons.appendChild(el);
+  }
+  collectedCountEl.textContent = `${count} / ${KEY_COUNT}`;
+}
+
+function checkAllCollected(){
+  if(collected.every(x=>x)){
+    spawnExitAndEnemies();
+  }
+}
+
+// spawn exit and enemies
+function spawnExitAndEnemies(){
+  exitPos = randomPassableCell(new Set([player.r+','+player.c]));
+  enemies = [];
+  const used = new Set([player.r+','+player.c, exitPos.r+','+exitPos.c]);
+  for(let i=0;i<ENEMY_COUNT;i++){
+    let p = randomPassableCell(used);
+    used.add(p.r+','+p.c);
+    enemies.push({r:p.r,c:p.c});
+  }
+  // start enemy movement
+  if(enemyInterval) clearInterval(enemyInterval);
+  enemyInterval = setInterval(()=>{
+    moveEnemiesStep();
+  }, 450);
+}
+
+function moveEnemiesStep(){
+  enemies.forEach(e=>{
+    if(Math.random()<0.3){
+      // attempt random move to neighboring passable cell
+      const dirs = [[-1,0],[0,1],[1,0],[0,-1]];
+      const choices=[];
+      for(const [dr,dc] of dirs){
+        const nr=e.r+dr, nc=e.c+dc;
+        if(indexOK(nr,nc) && !grid[e.r][e.c].walls[dirs.indexOf([dr,dc])]){
+          // can't rely on indexOf for arrays; instead check walls of current cell
+        }
+      }
+      // simpler: attempt to move to adjacent cell if there's no wall between
+      const cur = grid[e.r][e.c];
+      const dset = [[-1,0,0],[0,1,1],[1,0,2],[0,-1,3]];
+      dset.forEach(([dr,dc,wi])=>{
+        const nr=e.r+dr,nc=e.c+dc;
+        if(indexOK(nr,nc) && cur.walls[wi]===0) choices.push({r:nr,c:nc});
+      });
+      if(choices.length){
+        const pick = choices[Math.floor(Math.random()*choices.length)];
+        e.r = pick.r; e.c = pick.c;
+      }
+    }
+  });
+  // after moving, check collisions
+  enemies.forEach(e=>{
+    if(e.r===player.r && e.c===player.c){
+      // move exit to new random place
+      exitPos = randomPassableCell(new Set([player.r+','+player.c]));
+    }
+  });
+}
+
+// Note: the above enemy movement uses walls; but there is a bug above using indexOf; repaired by dset implementation.
+
+// player's movement
+let cellSize = size / COLS;
+function tryMove(dr,dc){
+  const r=player.r, c=player.c;
+  // check walls from current cell
+  const cur = grid[r][c];
+  let dirIndex = null;
+  if(dr===-1 && dc===0) dirIndex=0;
+  if(dr===0 && dc===1) dirIndex=1;
+  if(dr===1 && dc===0) dirIndex=2;
+  if(dr===0 && dc===-1) dirIndex=3;
+  if(dirIndex===null) return;
+  if(cur.walls[dirIndex]===0){
+    player.r+=dr; player.c+=dc; steps++; stepsEl.textContent = `Steps: ${steps}`;
+    // check key pickup
+    checkKeyPickup();
+    // check enemy touch
+    enemies.forEach(e=>{ if(e.r===player.r && e.c===player.c){ exitPos = randomPassableCell(new Set([player.r+','+player.c])); }});
+    // check exit
+    if(exitPos && player.r===exitPos.r && player.c===exitPos.c){ showWin(); }
+  }
+}
+
+// key pickup detection
+function checkKeyPickup(){
+  for(let i=0;i<KEY_COUNT;i++){
+    if(collected[i]) continue;
+    const pos = keyPositions[i];
+    if(!pos) continue;
+    if(pos.r===player.r && pos.c===player.c){
+      // open quiz modal
+      showQuestionForKey(i);
+      break;
+    }
+  }
+}
+
+// pick random start for player at top-left or random passable cell
+function resetPlayer(){
+  player = {r:0,c:0};
+  steps = 0; stepsEl.textContent = `Steps: ${steps}`;
+}
+
+// timer
+function startTimer(){
+  timerStart = Date.now();
+  if(timerId) clearInterval(timerId);
+  timerId = setInterval(()=>{
+    const diff = Date.now() - timerStart;
+    const mm = Math.floor(diff/60000).toString().padStart(2,'0');
+    const ss = Math.floor((diff%60000)/1000).toString().padStart(2,'0');
+    const dec = Math.floor((diff%1000)/100);
+    timerEl.textContent = `${mm}:${ss}.${dec}`;
+  },100);
+}
+function stopTimer(){ if(timerId) clearInterval(timerId); timerId=null; }
+
+// initialize keys
+function placeKeys(){
+  keyPositions=[];
+  const used = new Set([player.r+','+player.c]);
+  for(let i=0;i<KEY_COUNT;i++){
+    const p = randomPassableCell(used);
+    keyPositions.push(p);
+    used.add(p.r+','+p.c);
+  }
+}
+
+// drawing
+function draw(){
+  ctx.clearRect(0,0,size,size);
+  cellSize = size / COLS;
+  // draw background tiles
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  ctx.fillRect(0,0,size,size);
+  // draw walls
+  ctx.strokeStyle = 'rgba(11,18,32,0.95)';
+  ctx.lineWidth = Math.max(1, Math.floor(cellSize*0.12));
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const cell = grid[r][c];
+      const x=c*cellSize, y=r*cellSize;
+      // walls: N,E,S,W
+      ctx.beginPath();
+      if(cell.walls[0]){ ctx.moveTo(x,y); ctx.lineTo(x+cellSize,y); }
+      if(cell.walls[1]){ ctx.moveTo(x+cellSize,y); ctx.lineTo(x+cellSize,y+cellSize); }
+      if(cell.walls[2]){ ctx.moveTo(x+cellSize,y+cellSize); ctx.lineTo(x,y+cellSize); }
+      if(cell.walls[3]){ ctx.moveTo(x,y+cellSize); ctx.lineTo(x,y); }
+      ctx.stroke();
+    }
+  }
+  // draw keys
+  for(let i=0;i<KEY_COUNT;i++){
+    const pos = keyPositions[i];
+    if(!pos) continue;
+    const px = pos.c*cellSize + cellSize/2;
+    const py = pos.r*cellSize + cellSize/2;
+    // draw gift box
+    ctx.save();
+    ctx.translate(px,py);
+    const s = cellSize*0.42;
+    ctx.fillStyle = 'var(--gift)';
+    // box
+    ctx.fillRect(-s/1.2,-s/2,s*1.2,s*0.9);
+    // ribbon vertical
+    ctx.fillStyle = '#d97706';
+    ctx.fillRect(-s/12,-s/2,s/6,s*0.9);
+    // ribbon horizontal
+    ctx.fillRect(-s/1.2, -s/8, s*1.2, s/6);
+    // bow
+    ctx.beginPath(); ctx.moveTo(-s/3,-s/2); ctx.quadraticCurveTo(-s/1.6,-s/1.1,-s/6,-s/2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(s/3,-s/2); ctx.quadraticCurveTo(s/1.6,-s/1.1,s/6,-s/2); ctx.fill();
+    ctx.restore();
+  }
+  // draw exit
+  if(exitPos){
+    const px = exitPos.c*cellSize + cellSize/2;
+    const py = exitPos.r*cellSize + cellSize/2;
+    ctx.beginPath(); ctx.fillStyle = 'var(--goal)'; ctx.arc(px,py, Math.max(4,cellSize*0.28),0,Math.PI*2); ctx.fill();
+  }
+  // draw enemies
+  enemies.forEach(e=>{
+    const px = e.c*cellSize + cellSize/2;
+    const py = e.r*cellSize + cellSize/2;
+    ctx.beginPath(); ctx.fillStyle = 'var(--enemy)'; ctx.arc(px,py, Math.max(3,cellSize*0.22),0,Math.PI*2); ctx.fill();
+  });
+  // draw player (santa head)
+  const pr = player.r, pc = player.c;
+  const px = pc*cellSize + cellSize/2;
+  const py = pr*cellSize + cellSize/2;
+  // head
+  ctx.beginPath(); ctx.fillStyle = 'var(--player)'; ctx.arc(px,py, Math.max(4,cellSize*0.28),0,Math.PI*2); ctx.fill();
+  // hat - red with white trim
+  ctx.beginPath(); ctx.fillStyle = 'rgba(232,48,48,0.95)'; ctx.moveTo(px - cellSize*0.28, py - cellSize*0.18); ctx.quadraticCurveTo(px, py - cellSize*0.55, px + cellSize*0.32, py - cellSize*0.12); ctx.fill();
+  ctx.beginPath(); ctx.fillStyle = '#fff'; ctx.arc(px + cellSize*0.32 - 2, py - cellSize*0.12, Math.max(3,cellSize*0.06),0,Math.PI*2); ctx.fill();
+  // eyes
+  ctx.fillStyle='#000'; ctx.fillRect(px - cellSize*0.08, py - cellSize*0.04, Math.max(1,cellSize*0.04), Math.max(1,cellSize*0.04)); ctx.fillRect(px + cellSize*0.02, py - cellSize*0.04, Math.max(1,cellSize*0.04), Math.max(1,cellSize*0.04));
+}
+
+// main loop
+function loop(){ draw(); requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+
+// keyboard
+window.addEventListener('keydown', (e)=>{
+  if(modalBackdrop.style.display==='flex' || winBackdrop.style.display==='flex') return; // don't move when modal shown
+  const key = e.key;
+  if(['ArrowUp','w','W','ArrowDown','s','S','ArrowLeft','a','A','ArrowRight','d','D'].includes(key)){
+    e.preventDefault();
+  }
+  if(key==='ArrowUp' || key==='w' || key==='W') tryMove(-1,0);
+  if(key==='ArrowDown' || key==='s' || key==='S') tryMove(1,0);
+  if(key==='ArrowLeft' || key==='a' || key==='A') tryMove(0,-1);
+  if(key==='ArrowRight' || key==='d' || key==='D') tryMove(0,1);
+});
+
+// click/touch: optional taps to move (by clicking adjacent cell)
+canvas.addEventListener('click', (ev)=>{
+  const rect = canvas.getBoundingClientRect();
+  const mx = ev.clientX - rect.left; const my = ev.clientY - rect.top;
+  const c = Math.floor(mx / cellSize); const r = Math.floor(my / cellSize);
+  const dr = r - player.r; const dc = c - player.c;
+  // allow only single-step cardinal moves
+  if(Math.abs(dr)+Math.abs(dc)===1){ tryMove(dr,dc); }
+});
+
+// helper to initialize game
+function initGame(fullReset=false){
+  stopTimer();
+  if(enemyInterval) clearInterval(enemyInterval);
+  carveMazeDFS();
+  resetPlayer();
+  // reset keys
+  collected = Array(KEY_COUNT).fill(false);
+  placeKeys();
+  updateKeyIcons();
+  exitPos = null; enemies = [];
+  startTimer();
+  resizeCanvas();
+}
+
+function replay(){
+  // per spec: reset position, but better to full reset is accepted — we'll reset player pos and steps, keep keys and enemies if present
+  player = {r:0,c:0}; steps = 0; stepsEl.textContent = `Steps: ${steps}`;
+  // if exit and enemies exist, keep them; else nothing
+}
+
+// when player picks up key and answers wrong, we already relocate; we must ensure icons change only when collected
+
+// initial setup
+initGame(true);
+
+// check pickup on init (in case spawn on key)
+checkKeyPickup();
+
+// click outside modal to close? no, require answer
+
+</script>
+</body>
+</html>
